@@ -1,403 +1,523 @@
-var cubeRotation = 0.0;
+var renderer, scene, camera;
 
-var can = document.getElementById("glcanvas");
+var particleSystem, uniforms, geometry;
 
-main();
+var noParticles = 100;
+var radius = 15;
+var particleRad = 1.5;
+var redirectionParticles = [];
+var particlesInfo = [];
+var noInfoParam = 6;
 
-function resize(canvas) {
-   // Lookup the size the browser is displaying the canvas.
-   var displayWidth  = canvas.clientWidth;
-   var displayHeight = canvas.clientHeight;
+var RADIO = 0;
+var DIRECTION = 1;
+var ACCELERATION = 2;
+var POSITION = 3;
 
-   // Check if the canvas is not the same size.
-   if (canvas.width  !== displayWidth ||
-       canvas.height !== displayHeight) {
+var acc = 1;
+var accGr = 1;
 
-     // Make the canvas the same size
-     canvas.width  = displayWidth;
-     canvas.height = displayHeight;
-   }
-};
-//
-// Start here
-//
-function main() {
-  const canvas = document.querySelector('#glcanvas');
+var time = 0;
+var xVector = new THREE.Vector3(1,0,0);
+var yVector = new THREE.Vector3(0,1,0);
+var zVector = new THREE.Vector3(0,0,1);
+var xVectorNeg = new THREE.Vector3(-1,0,0);
+var yVectorNeg = new THREE.Vector3(0,-1,0);
+var zVectorNeg = new THREE.Vector3(0,0,-1);
 
-  
+var gravity = 9.8;
+var cameraz = 70;
+init();
+animate();
 
-  const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+function init() {
 
-  // If we don't have a GL context, give up now
+  camera = new THREE.PerspectiveCamera( 40, window.innerWidth / window.innerHeight, 1, 10000 );
 
-  if (!gl) {
-    alert('Unable to initialize WebGL. Your browser or machine may not support it.');
-    return;
-  }
+  scene = new THREE.Scene();
 
-  // Vertex shader program
+  uniforms = {
 
-  const vsSource = `
-    attribute vec4 aVertexPosition;
-    attribute vec4 aVertexColor;
-    uniform mat4 uModelViewMatrix;
-    uniform mat4 uProjectionMatrix;
-    varying lowp vec4 vColor;
-    void main(void) {
-      gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
-      vColor = aVertexColor;
-    }
-  `;
+    pointTexture: { value: new THREE.TextureLoader().load( "textures/bubble.png" ) }
 
-  // Fragment shader program
-
-  const fsSource = `
-    varying lowp vec4 vColor;
-    void main(void) {
-      gl_FragColor = vColor;
-    }
-  `;
-
-  // Initialize a shader program; this is where all the lighting
-  // for the vertices and so forth is established.
-  const shaderProgram = initShaderProgram(gl, vsSource, fsSource);
-
-  // Collect all the info needed to use the shader program.
-  // Look up which attributes our shader program is using
-  // for aVertexPosition, aVevrtexColor and also
-  // look up uniform locations.
-  const programInfo = {
-    program: shaderProgram,
-    attribLocations: {
-      vertexPosition: gl.getAttribLocation(shaderProgram, 'aVertexPosition'),
-      vertexColor: gl.getAttribLocation(shaderProgram, 'aVertexColor'),
-    },
-    uniformLocations: {
-      projectionMatrix: gl.getUniformLocation(shaderProgram, 'uProjectionMatrix'),
-      modelViewMatrix: gl.getUniformLocation(shaderProgram, 'uModelViewMatrix'),
-    },
   };
 
-  // Here's where we call the routine that builds all the
-  // objects we'll be drawing.
-  const buffers = initBuffers(gl);
+  var shaderMaterial = new THREE.ShaderMaterial( {
 
-  var then = 0;
+    uniforms: uniforms,
+    vertexShader: document.getElementById( 'vertexshader' ).textContent,
+    fragmentShader: document.getElementById( 'fragmentshader' ).textContent,
 
-  // Draw the scene repeatedly
-  function render(now) {
+    blending: THREE.NormalBlending,
+    depthTest: false,
+    transparent: true,
+    vertexColors: true
 
-    drawScene(gl, programInfo, buffers);
+  } );
 
+  geometry = new THREE.BufferGeometry();
+
+  var positions = [];
+  var colors = [];
+  var sizes = [];
+
+  var color = new THREE.Color();
+  var x,z;
+  var yEl = radius;
+  for ( var i = 0; i < noParticles; i ++ ) {
+
+    particlesInfo.push([]);
+
+    if(i == 0){
+      positions.push(getRandomArbitrary(-radius,radius) );
+      positions.push(yEl);
+      positions.push( getRandomArbitrary(-radius,radius) );
+    }else{
+      x = getRandomArbitrary(-radius,radius);
+      z = getRandomArbitrary(-radius,radius);
+      positions.push( x );
+      positions.push(yEl);
+      positions.push( z );
+    }
+    var counter = 0;
+    for( var j = 0; j<i; j++){
+      
+      var changed = false
+      while(distance(positions[i*3], positions[j*3], positions[i*3+1], positions[j*3+1], positions[i*3+2], positions[j*3+2]) <  particleRad*2){
+
+        // console.log(counter);
+        // console.log(distance(positions[i*3], positions[j*3], positions[i*3+1], positions[j*3+1], positions[i*3+2], positions[j*3+2]));
+        positions[i*3] = getRandomArbitrary(-radius,radius);
+        positions[i*3+1] = yEl;
+        positions[i*3+2] = getRandomArbitrary(-radius,radius);
+        // console.log(distance(positions[i*3], positions[j*3], positions[i*3+1], positions[j*3+1], positions[i*3+2], positions[j*3+2]));
+        counter++;
+        var changed = true;
+      }
+      if(changed){
+        j = -1;
+        counter++;
+        if(counter > ((radius+particleRad)/(2*particleRad))*((radius+particleRad)/(2*particleRad))){
+          yEl -= particleRad/2;
+          counter = 0;
+        }
+      }
+    }
+    particlesInfo[i].push(radius);
+
+    color.setHSL( i / noParticles, 1.0, 0.5 );
+    colors.push( 0.1, 0.62, 1.0 );
+    // var speed = getRandomArbitrary(1,100)/200;
+    // var direction = new THREE.Vector3(getRandomArbitrary(-radius,radius), getRandomArbitrary(-radius,radius), getRandomArbitrary(-radius,radius)).setLength(speed);
+
+    var direction = new THREE.Vector3(0, -0.01, 0);
+    particlesInfo[i].push(direction);
+    // particlesInfo[i].push(getRandomArbitrary(1,100)/20000);
+    particlesInfo[i].push(0.01);
+    particlesInfo[i].push(positions[i], positions[i+1], positions[i+2]);
+    particlesInfo[i].push(i);
+    redirectionParticles.push(i);
+    sizes.push( 20 );
   }
+  geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( positions, 3 ).setUsage( THREE.DynamicDrawUsage )  );
+  geometry.setAttribute( 'color', new THREE.Float32BufferAttribute( colors, 3 ) );
+  geometry.setAttribute( 'size', new THREE.Float32BufferAttribute( sizes, 1 ).setUsage( THREE.DynamicDrawUsage ));
+
+  particleSystem = new THREE.Points( geometry, shaderMaterial );
+
+  scene.add( particleSystem );
+
+  addCube();
+
+  renderer = new THREE.WebGLRenderer();
+  renderer.setPixelRatio( window.devicePixelRatio );
+  renderer.setSize( window.innerWidth, window.innerHeight );
+
+  var container = document.getElementById( 'container' );
+  container.appendChild( renderer.domElement );
+
+  window.addEventListener( 'resize', onWindowResize, false );
+
+  camera.position.z += cameraz;
+
+  acc = -0.0001;
+  time = 0;
 }
 
-//
-//initBuffers
-//
-// Initialize the buffers we'll need. For this demo, we just
-// have one object -- a simple three-dimensional cube.
-//
-function initBuffers(gl) {
+function animate() {
 
-  // Create a buffer for the cube's vertex positions.
+  requestAnimationFrame( animate );
 
-  const positionBuffer = gl.createBuffer();
+  render();
 
-  // Select the positionBuffer as the one to apply buffer
-  // operations to from here out.
-
-  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-
-  // Now create an array of positions for the cube.
-
-  const positions = [
-    // Front face
-    -2.0, -1.0,  1.0,
-     2.0, -1.0,  1.0,
-     2.0,  1.0,  1.0,
-    -2.0,  1.0,  1.0,
-
-    // Back face
-    -2.0, -1.0, -1.0,
-    -2.0,  1.0, -1.0,
-     2.0,  1.0, -1.0,
-     2.0, -1.0, -1.0
-
-    /*// Top face
-    -2.0,  1.0, -1.0,
-    -2.0,  1.0,  1.0,
-     2.0,  1.0,  1.0,
-     2.0,  1.0, -1.0,
-
-    // Bottom face
-    -2.0, -1.0, -1.0,
-     2.0, -1.0, -1.0,
-     2.0, -1.0,  1.0,
-    -2.0, -1.0,  1.0,
-
-    // Right face
-     2.0, -1.0, -1.0,
-     2.0,  1.0, -1.0,
-     2.0,  1.0,  1.0,
-     2.0, -1.0,  1.0,
-
-    // Left face
-    -2.0, -1.0, -1.0,
-    -2.0, -1.0,  1.0,
-    -2.0,  1.0,  1.0,
-    -2.0,  1.0, -1.0,*/
-  ];
-
-  // Now pass the list of positions into WebGL to build the
-  // shape. We do this by creating a Float32Array from the
-  // JavaScript array, then use it to fill the current buffer.
-
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
-
-  // Now set up the colors for the faces. We'll use solid colors
-  // for each face.
-
-  /*const faceColors = [
-    1.0,  1.0,  1.0,  1.0    // Front face: white
-    [1.0,  0.0,  0.0,  1.0],    // Back face: red
-    [0.0,  1.0,  0.0,  1.0],    // Top face: green
-    [0.0,  0.0,  1.0,  1.0],    // Bottom face: blue
-    [1.0,  1.0,  0.0,  1.0],    // Right face: yellow
-    [1.0,  0.0,  1.0,  1.0],    // Left face: purple
-  ];*/
-
-  // Convert the array of colors into a table for all the vertices.
-
-  var colors = [1.0,1.0,1.0,1.0];
-
-  /*for (var j = 0; j < faceColors.length; ++j) {
-    const c = faceColors[j];
-
-    // Repeat each color four times for the four vertices of the face
-    colors = colors.concat(c, c, c, c);
-  }*/
-
-  const colorBuffer = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
-
-  // Build the element array buffer; this specifies the indices
-  // into the vertex arrays for each face's vertices.
-
-  /*const indexBuffer = gl.createBuffer();
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-
-  // This array defines each face as two triangles, using the
-  // indices into the vertex array to specify each triangle's
-  // position.
-
-  const indices = [
-    0,  1,  2,      0,  2,  3,    // front
-    4,  5,  6,      4,  6,  7,    // back
-    8,  9,  10,     8,  10, 11,   // top
-    12, 13, 14,     12, 14, 15,   // bottom
-    16, 17, 18,     16, 18, 19,   // right
-    20, 21, 22,     20, 22, 23,   // left
-  ];
-
-  // Now send the element array to GL
-
-  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,
-      new Uint16Array(indices), gl.STATIC_DRAW);*/
-
-  return {
-    position: positionBuffer,
-    color: colorBuffer,
-    //indices: indexBuffer,
-  };
 }
 
-//
-// Draw the scene.
-//
-function drawScene(gl, programInfo, buffers, deltaTime) {
-  resize(gl.canvas);
-  gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+var timeLastTime;
+var checked = false; 
+var restartTimer = true;
+var countingTime = true;
+var updatedDir;
+var curDir
+function render() {
+  var positions = geometry.attributes.position.array;
+
+  if(!checked){
+    updatedDir = [];
+    for ( var i = 0; i < noParticles; i++ ) {
+      particlesInfo[i][POSITION] = positions[i*3];
+      particlesInfo[i][POSITION+2] = positions[i*3+2];
+      updatedDir.push(null);
+    }
+   
+    checked = !checked
+  }
+  if(restartTimer){
+    time= 0;
+    restartTimer = false;
+  }if(countingTime){
+    time += (Date.now() - timeLastTime)/1000.0;
+  }
+
+  timeLastTime = Date.now();
   
-  gl.clearColor(0.0, 0.0, 0.0, 1.0);  // Clear to black, fully opaque
-  gl.clearDepth(1.0);                 // Clear everything
-  gl.enable(gl.DEPTH_TEST);           // Enable depth testing
-  gl.depthFunc(gl.LESS);            // Near things obscure far things
+  for ( var i = 0; i < noParticles; i++ ) {
 
-  /*gl.clearColor(0.5, 0.5, 0.5, 0.0);
-  gl.disable(gl.DEPTH_TEST);
-  gl.depthFunc(gl.LEQUAL)
-  gl.depthMask(false);
-  gl.enable(gl.BLEND);
-  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    // console.log(particlesInfo[i][DIRECTION]);
+    
+    positions[i*3] += particlesInfo[i][DIRECTION].getComponent(0);
+    positions[i*3+1] += particlesInfo[i][DIRECTION].getComponent(1);
+    positions[i*3+2] += particlesInfo[i][DIRECTION].getComponent(2);
+    
+    particlesInfo[i][DIRECTION].setComponent(1, particlesInfo[i][DIRECTION].getComponent(1) - time * particlesInfo[i][ACCELERATION]);
 
-  gl.enable(gl.BLEND);
-  var blendingAlpha = 1.0
-  var blendingColor = [0.0, 1.0, 0.0]
-  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);   
-  gl.blendColor(blendingColor[0], blendingColor[1], blendingColor[2], blendingAlpha);    
-  */
-  // Clear the canvas before we start drawing on it.
 
-  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    curDir = particlesInfo[i][DIRECTION];
+    var collisionsAbove = [];
+    var collisionsBelow = [];
+    
+    for( var j = 0; j<noParticles; j++){
+      if(distance(positions[i*3], positions[j*3], positions[i*3+1], positions[j*3+1], positions[i*3+2], positions[j*3+2]) < particleRad*2 && positions[i*3+1] > positions[j*3+1]){
+        // console.log("collisions moving");
+        // collisions.push(findNewDirectionOnCollision([positions[j*3], positions[j*3+1], positions[j*3+2]], 
+        //                                                             [positions[i*3], positions[i*3+1], positions[i*3+1]],
+        //                                                             particlesInfo[i][DIRECTION].length()));
+        // console.log(collisions);
+        collisionsBelow.push(j);
+      }
+      if(distance(positions[i*3], positions[j*3], positions[i*3+1], positions[j*3+1], positions[i*3+2], positions[j*3+2]) < particleRad*2 && i !=j && positions[i*3+1] <= positions[j*3+1]){
+        collisionsAbove.push(j)
+      }
+    } 
 
-  // Create a perspective matrix, a special matrix that is
-  // used to simulate the distortion of perspective in a camera.
-  // Our field of view is 45 degrees, with a width/height
-  // ratio that matches the display size of the canvas
-  // and we only want to see objects between 0.1 units
-  // and 100 units away from the camera.
+    curDir = particlesCollision([positions[i*3], positions[i*3+1], positions[i*3+2]], particlesInfo[i][DIRECTION], collisionsAbove, collisionsBelow, positions);
+    // console.log(curDir);
+    var collX = 0;
+    var collZ = 0;
+    if(Math.abs(positions[i*3+2]) > radius){
+      if(positions[i*3+2] > radius){
+        positions[i*3+2] = radius;
+        collZ = 1
+      }else{
+        positions[i*3+2] = -radius;
+        collZ = -1
+      }
+    } if(Math.abs(positions[i*3]) > radius){
+      if(positions[i*3] > radius){
+        positions[i*3] = radius;
+        collX = 1
+      }else{
+        positions[i*3] = -radius;
+        collX = -1
+      }
+    }
 
-  /*const fieldOfView = 45 * Math.PI / 180;   // in radians
-  const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
-  const zNear = 0.1;
-  const zFar = 100.0;
-  const projectionMatrix = mat4.create();
+    if(Math.abs(positions[i*3+1]) > radius){
+      if(positions[i*3+1] > radius){
+        positions[i*3+1] = radius;
+      }else{
+        positions[i*3+1] = -radius;
+      }
+      curDir = collisionOnWallY(curDir, collX, collZ);
+      // console.log(curDir);
+    }
 
-  // note: glmatrix.js always has the first argument
-  // as the destination to receive the result.
-  mat4.perspective(projectionMatrix,
-                   fieldOfView,
-                   aspect,
-                   zNear,
-                   zFar);
+    if(collZ != 0){
+      curDir = collisionOnWallZ(curDir);
+    }
+    if(collX != 0){
+      curDir = collisionOnWallX(curDir);
+    }
+    
 
-  // Set the drawing position to the "identity" point, which is
-  // the center of the scene.
-  const modelViewMatrix = mat4.create();
+    if(curDir.getComponent(1) == 0){
+      countingTime = false;
+    }
+    if(curDir.getComponent(1) != 0 && particlesInfo[i][DIRECTION].getComponent(1) == 0){
+      particlesInfo[i][ACCELERATION] = 0.01;
+      restartTimer = true;
+      countingTime = true;
+    }
 
-  // Now move the drawing position a bit to where we want to
-  // start drawing the square.
+    updatedDir[i] = curDir;
+    
+  }
+  geometry.attributes.position.needsUpdate = true;
 
-  mat4.translate(modelViewMatrix,     // destination matrix
-                 modelViewMatrix,     // matrix to translate
-                 [-0.0, 0.0, -6.0]);  // amount to translate
-  mat4.rotate(modelViewMatrix,  // destination matrix
-              modelViewMatrix,  // matrix to rotate
-              Math.PI/6,        // amount to rotate in radians
-              [0, 0, 1]);       // axis to rotate around (Z)
-  mat4.rotate(modelViewMatrix,  // destination matrix
-              modelViewMatrix,  // matrix to rotate
-              Math.PI/14,        // amount to rotate in radians
-              [1, 0, 0]);       // axis to rotate around (X)
 
-  // Tell WebGL how to pull out the positions from the position
-  // buffer into the vertexPosition attribute
-  {
-    const numComponents = 3;
-    const type = gl.FLOAT;
-    const normalize = false;
-    const stride = 0;
-    const offset = 0;
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position);
-    gl.vertexAttribPointer(
-        programInfo.attribLocations.vertexPosition,
-        numComponents,
-        type,
-        normalize,
-        stride,
-        offset);
-    gl.enableVertexAttribArray(
-        programInfo.attribLocations.vertexPosition);
+  for ( var i = 0; i < noParticles; i++ ) {
+    particlesInfo[i][DIRECTION] = updatedDir[i];
   }
 
-  // Tell WebGL how to pull out the colors from the color buffer
-  // into the vertexColor attribute.
-  {
-    const numComponents = 4;
-    const type = gl.FLOAT;
-    const normalize = false;
-    const stride = 0;
-    const offset = 0;
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffers.color);
-    gl.vertexAttribPointer(
-        programInfo.attribLocations.vertexColor,
-        numComponents,
-        type,
-        normalize,
-        stride,
-        offset);
-    gl.enableVertexAttribArray(
-        programInfo.attribLocations.vertexColor);
+  renderer.render( scene, camera );
+
+}
+
+function updatePositionFalling(time, dirParticle){
+  var initial = dirParticle.getComponent(1);
+  dirParticle.setComponent(1, initial-((1/2)*gravity*time*time));
+}
+
+function collisionOnWallX(dirParticle){
+  if(dirParticle.getComponent(1)<0){
+    return new THREE.Vector3(0, dirParticle.getComponent(1) - Math.abs(dirParticle.getComponent(0)), dirParticle.getComponent(2));
+  }
+  return new THREE.Vector3(0, Math.abs(dirParticle.getComponent(0)), dirParticle.getComponent(2));
+}
+
+function collisionOnWallZ(dirParticle){
+  if(dirParticle.getComponent(1)<0){
+    return new THREE.Vector3(0, dirParticle.getComponent(1) - Math.abs(dirParticle.getComponent(2)), dirParticle.getComponent(2));
+  }
+  return new THREE.Vector3(dirParticle.getComponent(0), Math.abs(dirParticle.getComponent(2)), 0);
+}
+
+var vec;
+var rand1;
+function collisionOnWallY(dirParticle, collX, collZ){
+  if(dirParticle.getComponent(0) == 0 && dirParticle.getComponent(2)==0){
+    if(collX != 0 || collZ != 0){
+      return new THREE.Vector3(-collX, 0, -collZ).setLength(dirParticle.length());
+    }else{
+      return new THREE.Vector3(getRandomArbitrary(-100,100), 0, getRandomArbitrary(-100,100)).setLength(dirParticle.length()/2);
+    }
+  }
+  return new THREE.Vector3(dirParticle.getComponent(0), 0, dirParticle.getComponent(2));
+}
+
+var solDir;
+var curPerc
+var vector;
+var vectorAdd;
+var copyVector;
+var middleColPoint;
+function particlesCollision(posParticle, dirParticle, collisionsAbove, collisionsBelow, positions){
+  solDir = dirParticle
+  if(collisionsAbove.length){
+
+    solDir = new THREE.Vector3(0,0,0);
+    middleColPoint = [0,0,0];
+    vectorAdd = new THREE.Vector3(0,0,0);
+    copyVector = new THREE.Vector3();
+    for(var i = 0; i<collisionsAbove.length; i++){
+      curPerc = angleOfTwoCollidedParticles(posParticle, dirParticle, [positions[collisionsAbove[i]*3], positions[collisionsAbove[i]*3+1], positions[collisionsAbove[i]*3+2]], particlesInfo[collisionsAbove[i]][DIRECTION]);
+
+      curPerc = 1 - (curPerc/(Math.PI/4));
+      // curPerc = 1 ;
+      copyVector.copy(particlesInfo[collisionsAbove[i]][DIRECTION]);
+      copyVector.setLength(particlesInfo[collisionsAbove[i]][DIRECTION].length()*curPerc);
+
+      vectorAdd.add(copyVector);
+
+      middleColPoint[0] = positions[collisionsAbove[i]*3] * 1/collisionsAbove.length;
+      middleColPoint[1] = positions[collisionsAbove[i]*3+1] * 1/collisionsAbove.length;
+      middleColPoint[2] = positions[collisionsAbove[i]*3+2] * 1/collisionsAbove.length;
+    }
+    solDir.set(-(middleColPoint[0]-posParticle[0]), -(middleColPoint[1]-posParticle[1]), -(middleColPoint[2]-posParticle[2]));
+    solDir.setLength(0.01);
+    // console.log(dirParticle);
+    if(Math.cos(solDir.angleTo(vectorAdd))>=0){
+      solDir.setLength(solDir.length() + Math.cos(solDir.angleTo(vectorAdd))*vectorAdd.length());
+    }
+    if(Math.cos(solDir.angleTo(dirParticle))>=0){
+      solDir.setLength(solDir.length() + Math.cos(solDir.angleTo(dirParticle))*dirParticle.length());
+    }
+    // console.log(solDir);
+    
   }
 
-  // Tell WebGL which indices to use to index the vertices
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.indices);
+  if(collisionsBelow.length == 2){
+    var collisions = [findNewDirectionOnCollision([positions[collisionsBelow[0]*3], positions[collisionsBelow[0]*3+1], positions[collisionsBelow[0]*3+2]], 
+                      posParticle,
+                      particlesInfo[collisionsBelow[0]][DIRECTION].length(), solDir),
+                      findNewDirectionOnCollision([positions[collisionsBelow[1]*3], positions[collisionsBelow[1]*3+1], positions[collisionsBelow[1]*3+2]], 
+                      posParticle,
+                      particlesInfo[collisionsBelow[1]][DIRECTION].length(), solDir)];
 
-  // Tell WebGL to use our program when drawing
+    var vec = new THREE.Vector3(0,0,0);
+    vec.copy(collisions[0]);
+    collisions[0].cross( collisions[1]);
+    collisions[1].cross(vec);
+    if(collisions[0].getComponent(1)< collisions[1].getComponent(1)){
+      solDir = new THREE.Vector3(collisions[0].getComponent(0), collisions[0].getComponent(1), collisions[0].getComponent(2)).setLength(dirParticle.length);
+    }else{
+      solDir = new THREE.Vector3(collisions[1].getComponent(0), collisions[1].getComponent(1), collisions[1].getComponent(2)).setLength(dirParticle.length);
+    }
+  }else if (collisionsBelow.length == 1){
+    solDir = findNewDirectionOnCollision([positions[collisionsBelow[0]*3], positions[collisionsBelow[0]*3+1], positions[collisionsBelow[0]*3+2]], 
+      posParticle,
+      particlesInfo[collisionsBelow[0]][DIRECTION].length(), solDir);
+  }
+  return solDir;
+}
 
-  gl.useProgram(programInfo.program);
+function angleOfTwoCollidedParticles(posParticleOriginal, dirParticleOriginal, posParticleCollided, dirParticleCollided){
 
-  // Set the shader uniforms
+  var normalPlane = new THREE.Vector3(posParticleOriginal[0] - posParticleCollided[0], posParticleOriginal[1] - posParticleCollided[1], posParticleOriginal[2] - posParticleCollided[2]);
+  
+  var angleColl = dirParticleCollided.angleTo(normalPlane);
+  var angleOr = dirParticleOriginal.angleTo(normalPlane);
+  while(angleColl > (Math.PI/4)) angleColl -= (Math.PI/4);
+  while(angleOr > (Math.PI/4)) angleOr -= (Math.PI/4);
 
-  gl.uniformMatrix4fv(
-      programInfo.uniformLocations.projectionMatrix,
-      false,
-      projectionMatrix);
-  gl.uniformMatrix4fv(
-      programInfo.uniformLocations.modelViewMatrix,
-      false,
-      modelViewMatrix);
+  return Math.min(angleColl, angleOr);
+}
 
-  {
-    const vertexCount = 0;
-    const type = gl.UNSIGNED_SHORT;
-    const offset = 6;*/
-  gl.drawArrays(gl.LiINES, vertexCount, offset);
+//cSphere = [x,y,z]
+var point;
+var vector;
+var normalPlane;
+var middleSpheres;
+var normal;
+var planeCirc;
+var vectorForOperation;
+var vectorForCopying;
+function findNewDirectionOnCollision(cSphereCollided, cSphereOriginal, radio, vectorToMatch) {
+  middleSpheres = [(cSphereCollided[0] + cSphereOriginal[0])/2, 
+                      (cSphereCollided[1] + cSphereOriginal[1])/2, 
+                      (cSphereCollided[2] + cSphereOriginal[2])/2]
+
+  normalPlane = new THREE.Vector3(cSphereOriginal[0] - cSphereCollided[0], cSphereOriginal[1] - cSphereCollided[1], cSphereOriginal[2] - cSphereCollided[2]);
+
+  planeCirc = new THREE.Plane(normalPlane, middleSpheres);
+
+  vectorForOperation = new THREE.Vector3(0,0,0);
+  vectorForCopying = new THREE.Vector3();
+  planeCirc.projectPoint(vectorToMatch, vectorForCopying);
+  planeCirc.projectPoint(vectorForOperation, vectorForOperation);
+  return new THREE.Vector3(vectorForOperation.getComponent(0) - vectorForCopying.getComponent(0), 
+                              vectorForOperation.getComponent(1) - vectorForCopying.getComponent(1), 
+                              vectorForOperation.getComponent(2) - vectorForCopying.getComponent(2)).setLength(radio);
+
+  // normal = new THREE.Vector3(0,1,0);
+
+  // normal.cross(normalPlane);
+  // normal.applyAxisAngle(normalPlane, Math.PI/2);
+  // normal.setLength(radio);
+
+  // if(middleSpheres[1]+normal.getComponent(1) < middleSpheres[1]-normal.getComponent(1)){
+  //   point = [middleSpheres[0]+normal.getComponent(0), middleSpheres[1]+normal.getComponent(1), middleSpheres[2]+normal.getComponent(2)]
+  // }else{
+  //   point = [middleSpheres[0]-normal.getComponent(0), middleSpheres[1]-normal.getComponent(1), middleSpheres[2]-normal.getComponent(2)]
   // }
 
-  // // Update the rotation for the next draw
+  // return new THREE.Vector3(point[0], point[1], point[2]);
+};
 
-  // cubeRotation += deltaTime;
+function distance(x1, x2, y1, y2, z1, z2){
+  var x = Math.abs(x1-x2);
+  var y = Math.abs(y1-y2);
+  var z = Math.abs(z1-z2);
+  return Math.sqrt(x*x + y*y + z*z);
 }
 
-//
-// Initialize a shader program, so WebGL knows how to draw our data
-//
-function initShaderProgram(gl, vsSource, fsSource) {
-  const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
-  const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
-
-  // Create the shader program
-
-  const shaderProgram = gl.createProgram();
-  gl.attachShader(shaderProgram, vertexShader);
-  gl.attachShader(shaderProgram, fragmentShader);
-  gl.linkProgram(shaderProgram);
-
-  // If creating the shader program failed, alert
-
-  if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
-    alert('Unable to initialize the shader program: ' + gl.getProgramInfoLog(shaderProgram));
-    return null;
-  }
-
-  return shaderProgram;
+function distance2d(x1, x2, y1, y2){
+  var x = Math.abs(x1-x2);
+  var y = Math.abs(y1-y2);
+  return Math.sqrt(x*x + y*y);
 }
 
-//
-// creates a shader of the given type, uploads the source and
-// compiles it.
-//
-function loadShader(gl, type, source) {
-  const shader = gl.createShader(type);
+function getRandomArbitrary(min, max) {
+  return Math.random() * (max - min) + min;
+}
 
-  // Send the source to the shader object
+function addCube(){
+  var sizeCube = radius+particleRad;
 
-  gl.shaderSource(shader, source);
+  var geometryLine = new THREE.Geometry();
+  geometryLine.vertices.push(new THREE.Vector3( sizeCube, sizeCube, sizeCube) );
+  geometryLine.vertices.push(new THREE.Vector3( sizeCube, sizeCube, -sizeCube) );
+  geometryLine.vertices.push(new THREE.Vector3( sizeCube, -sizeCube, -sizeCube) );
+  geometryLine.vertices.push(new THREE.Vector3( sizeCube, -sizeCube, sizeCube) );
+  geometryLine.vertices.push(new THREE.Vector3( sizeCube, sizeCube, sizeCube) );
+  geometryLine.vertices.push(new THREE.Vector3( -sizeCube, sizeCube, sizeCube) );
+  geometryLine.vertices.push(new THREE.Vector3( -sizeCube, sizeCube, -sizeCube) );
+  geometryLine.vertices.push(new THREE.Vector3( -sizeCube, -sizeCube, -sizeCube) );
+  geometryLine.vertices.push(new THREE.Vector3( -sizeCube, -sizeCube, sizeCube) );
+  geometryLine.vertices.push(new THREE.Vector3( -sizeCube, sizeCube, sizeCube) );
+  var materialLine = new THREE.LineBasicMaterial( { color: 0xffffff } );
+  var line = new THREE.Line( geometryLine, materialLine );
+  scene.add( line );
 
-  // Compile the shader program
+  var geometryLine1 = new THREE.Geometry();
+  geometryLine1.vertices.push(new THREE.Vector3( sizeCube, sizeCube, -sizeCube) );
+  geometryLine1.vertices.push(new THREE.Vector3( -sizeCube, sizeCube, -sizeCube) );
+  var line1 = new THREE.Line( geometryLine1, materialLine );
+  scene.add( line1 );
 
-  gl.compileShader(shader);
+  var geometryLine2 = new THREE.Geometry();
+  geometryLine2.vertices.push(new THREE.Vector3( sizeCube, -sizeCube, -sizeCube) );
+  geometryLine2.vertices.push(new THREE.Vector3( -sizeCube, -sizeCube, -sizeCube) );
+  var line2 = new THREE.Line( geometryLine2, materialLine );
+  scene.add( line2 );
 
-  // See if it compiled successfully
+  var geometryLine3 = new THREE.Geometry();
+  geometryLine3.vertices.push(new THREE.Vector3( sizeCube, -sizeCube, sizeCube) );
+  geometryLine3.vertices.push(new THREE.Vector3( -sizeCube, -sizeCube, sizeCube) );
+  var line3 = new THREE.Line( geometryLine3, materialLine );
+  scene.add( line3 );
 
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    alert('An error occurred compiling the shaders: ' + gl.getShaderInfoLog(shader));
-    gl.deleteShader(shader);
-    return null;
-  }
+  var geometryBox = new THREE.BoxGeometry( sizeCube*2, sizeCube*2, sizeCube*2 );
+  var materialBox = new THREE.MeshBasicMaterial( { color: 0xffffff, opacity: 0.5, transparent: true} );
+  var cube = new THREE.Mesh( geometryBox, materialBox );
+  scene.add( cube );
+}
 
-  return shader;
+function onWindowResize() {
+
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+
+  renderer.setSize( window.innerWidth, window.innerHeight );
+
+}
+
+function onBorderMouseDown( ev ) {
+
+  // activate draggable window resizing bar
+  window.addEventListener( "mousemove", onBorderMouseMove );
+  window.addEventListener( "mouseup", onBorderMouseUp );
+  ev.stopPropagation();
+  ev.preventDefault();
+
+}
+
+function onBorderMouseMove( ev ) {
+
+  screensplit = Math.max( 0, Math.min( 1, ev.clientX / window.innerWidth ) );
+  ev.stopPropagation();
+
+}
+
+function onBorderMouseUp() {
+
+  window.removeEventListener( "mousemove", onBorderMouseMove );
+  window.removeEventListener( "mouseup", onBorderMouseUp );
+
+}
+
+function onMouseMove( ev ) {
+
+  mouse[ 0 ] = ev.clientX / window.innerWidth;
+  mouse[ 1 ] = ev.clientY / window.innerHeight;
+
 }
