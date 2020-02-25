@@ -25,6 +25,7 @@ var zVector = new THREE.Vector3(0,0,1);
 var xVectorNeg = new THREE.Vector3(-1,0,0);
 var yVectorNeg = new THREE.Vector3(0,-1,0);
 var zVectorNeg = new THREE.Vector3(0,0,-1);
+var noSpeed = new THREE.Vector3(0,0,0);
 
 var gravity = 9.8;
 var cameraz = 70;
@@ -191,21 +192,27 @@ function render() {
     
     // console.log( particlesInfo[i][DIRECTION]);
     curDir = particlesInfo[i][DIRECTION];
-    var collisionsAbove = [];
-    var collisionsBelow = [];
-    
+    var collisionsAboveDir = [];
+    var collisionsBelowDir = [];
+    var collisionsAbovePos = [];
+    var collisionsBelowPos = [];
+
     for( var j = 0; j<noParticles; j++){
       if(distance(positions[i*3], positions[j*3], positions[i*3+1], positions[j*3+1], positions[i*3+2], positions[j*3+2]) < particleRad*2 && i !=j){
         if( positions[i*3+1] > positions[j*3+1] ){
-          collisionsBelow.push(j);
+          // collisionsBelow.push(j);
+          collisionsBelowDir.push(particlesInfo[j][DIRECTION]);
+          collisionsBelowPos.push(positions[j*3], positions[j*3+1], positions[j*3+2]);
         }
         if( positions[i*3+1] <= positions[j*3+1]){
-          collisionsAbove.push(j)
+          // collisionsAbove.push(j)
+          collisionsAboveDir.push(particlesInfo[j][DIRECTION]);
+          collisionsAbovePos.push(positions[j*3], positions[j*3+1], positions[j*3+2]);
         }
       }
     } 
 
-    curDir = particlesCollision([positions[i*3], positions[i*3+1], positions[i*3+2]], particlesInfo[i][DIRECTION], collisionsAbove, collisionsBelow, positions);
+    curDir = particlesCollision([positions[i*3], positions[i*3+1], positions[i*3+2]], particlesInfo[i][DIRECTION], collisionsAboveDir, collisionsBelowDir, collisionsAbovePos, collisionsBelowPos);
     // console.log(curDir);
     var collX = 0;
     var collZ = 0;
@@ -230,11 +237,15 @@ function render() {
     if(Math.abs(positions[i*3+1]) > radius){
       if(positions[i*3+1] > radius){
         positions[i*3+1] = radius;
+        if(curDir.getComponent(0) != 0 || curDir.getComponent(2) != 0){
+          curDir = collisionOnWallY(curDir, collX, collZ);
+        }else{
+          curDir.set(0,0,0);
+        }
       }else{
         positions[i*3+1] = -radius;
+        curDir = collisionOnWallY(curDir, collX, collZ);
       }
-      curDir = collisionOnWallY(curDir, collX, collZ);
-      // console.log(curDir);
     }
 
     if(collZ != 0){
@@ -294,7 +305,7 @@ var rand1;
 function collisionOnWallY(dirParticle, collX, collZ){
   if(dirParticle.getComponent(0) == 0 && dirParticle.getComponent(2)==0){
     if(collX != 0 || collZ != 0){
-      return new THREE.Vector3(-collX, 0, -collZ).setLength(dirParticle.length());
+      return new THREE.Vector3(-collX, 0, -collZ);
     }else{
       return new THREE.Vector3(getRandomArbitrary(-100,100), 0, getRandomArbitrary(-100,100)).setLength(dirParticle.length()/2);
     }
@@ -308,88 +319,61 @@ var vector;
 var vectorAdd;
 var copyVector;
 var middleColPoint;
-function particlesCollision(posParticle, dirParticle, collisionsAbove, collisionsBelow, positions){
-  solDir = dirParticle
-  if(collisionsAbove.length){
+var straightColl = []
+//[positions[i*3], positions[i*3+1], positions[i*3+2]], particlesInfo[i][DIRECTION], collisionsAboveDir, collisionsBelowDir, collisionsAbovePos, collisionsBelowPos
+function particlesCollision(posParticle, dirParticle, collisionsAboveDir, collisionsBelowDir, collisionsAbovePos, collisionsBelowPos){
+  solDir = dirParticle;
 
+  if(collisionsAboveDir.length){
+    
     solDir = new THREE.Vector3(0,0,0);
     middleColPoint = [0,0,0];
     vectorAdd = new THREE.Vector3(0,0,0);
     copyVector = new THREE.Vector3();
-    for(var i = 0; i<collisionsAbove.length; i++){
-      curPerc = angleOfTwoCollidedParticles(posParticle, dirParticle, [positions[collisionsAbove[i]*3], positions[collisionsAbove[i]*3+1], positions[collisionsAbove[i]*3+2]], particlesInfo[collisionsAbove[i]][DIRECTION]);
+    for(var i = 0; i<collisionsAboveDir.length; i++){
+      curPerc = angleOfTwoCollidedParticles(posParticle, dirParticle, [collisionsAbovePos[i*3], collisionsAbovePos[i*3+1], collisionsAbovePos[i*3+2]], collisionsAboveDir[i]);
 
       curPerc = 1 - (curPerc/(Math.PI/4));
-      // curPerc = 1 ;
-      copyVector.copy(particlesInfo[collisionsAbove[i]][DIRECTION]);
-      copyVector.setLength(particlesInfo[collisionsAbove[i]][DIRECTION].length()*curPerc);
+      copyVector.copy(collisionsAboveDir[i]);
+      copyVector.setLength(collisionsAboveDir[i].length()*curPerc);
 
       vectorAdd.add(copyVector);
 
-      middleColPoint[0] = positions[collisionsAbove[i]*3] * 1/collisionsAbove.length;
-      middleColPoint[1] = positions[collisionsAbove[i]*3+1] * 1/collisionsAbove.length;
-      middleColPoint[2] = positions[collisionsAbove[i]*3+2] * 1/collisionsAbove.length;
+      middleColPoint[0] += collisionsAbovePos[i*3] * 1/collisionsAboveDir.length;
+      middleColPoint[1] += collisionsAbovePos[i*3+1] * 1/collisionsAboveDir.length;
+      middleColPoint[2] += collisionsAbovePos[i*3+2] * 1/collisionsAboveDir.length;
     }
+    
     solDir.set(-(middleColPoint[0]-posParticle[0]), -(middleColPoint[1]-posParticle[1]), -(middleColPoint[2]-posParticle[2]));
     solDir.setLength(0.01);
-    // console.log(dirParticle);
+    // console.log(collisionsAbovePos);
     if(Math.cos(solDir.angleTo(vectorAdd))>=0){
       solDir.setLength(solDir.length() + Math.cos(solDir.angleTo(vectorAdd))*vectorAdd.length());
     }
     if(Math.cos(solDir.angleTo(dirParticle))>=0){
       solDir.setLength(solDir.length() + Math.cos(solDir.angleTo(dirParticle))*dirParticle.length());
     }
-    // console.log(solDir);
     
   }
 
-  // if(collisionsBelow.length >= 3){
-  //   console.log("three");
-  //   solDir = new THREE.Vector3(0,0,0);
-  // }
-  if(collisionsBelow.length > 0){
-    // console.log("Two");
-    // var collisions = [findNewDirectionOnCollision([positions[collisionsBelow[0]*3], positions[collisionsBelow[0]*3+1], positions[collisionsBelow[0]*3+2]], 
-    //                   posParticle,
-    //                   particlesInfo[collisionsBelow[0]][DIRECTION].length(), solDir),
-    //                   findNewDirectionOnCollision([positions[collisionsBelow[1]*3], positions[collisionsBelow[1]*3+1], positions[collisionsBelow[1]*3+2]], 
-    //                   posParticle,
-    //                   particlesInfo[collisionsBelow[1]][DIRECTION].length(), solDir)];
-    // var vec = new THREE.Vector3();
-    // vec.copy(collisions[0]);
-    // collisions[0].cross( collisions[1]);
-    // collisions[1].cross(vec);
-    // var coll = new THREE.Vector3();
-    // coll.copy(particlesInfo[collisionsBelow[0]][DIRECTION]);
-    // coll.add(particlesInfo[collisionsBelow[1]][DIRECTION]);
-    // if(collisions[0].angleTo(coll)< collisions[1].angleTo(coll)){
-    //   solDir = collisions[0].setLength(dirParticle.length());
-    // }else{
-    //   solDir = collisions[1].setLength(dirParticle.length());
-    // }
-    // console.log("two")
+  if(collisionsBelowDir.length > 0){
     var finalVec = new THREE.Vector3();
     finalVec.copy(solDir);
     var angleFinal = [] 
-    for(var i = 0; i<collisionsBelow.length; i++){
-      finalVec.add(particlesInfo[collisionsBelow[i]][DIRECTION]);
-      angleFinal.push(calculateVector(posParticle, [positions[collisionsBelow[i]*3], positions[collisionsBelow[i]*3+1], positions[collisionsBelow[i]*3+2]]).angleTo(finalVec));
+    for(var i = 0; i<collisionsBelowDir.length; i++){
+      finalVec.add(collisionsBelowDir[i]);
+      angleFinal.push(calculateVector(posParticle, [collisionsBelowPos[i*3], collisionsBelowPos[i*3+1], collisionsBelowPos[i*3+2]]).angleTo(finalVec));
     }
-    var i = angleFinal.indexOf(Math.min(...angleFinal));
-    solDir = findNewDirectionOnCollision([positions[collisionsBelow[i]*3], positions[collisionsBelow[i]*3+1], positions[collisionsBelow[i]*3+2]], 
-      posParticle,
-      finalVec.length(), finalVec);
-
     
-  }
-  // else if (collisionsBelow.length == 1){
-  //   // console.log(solDir);
-  //   solDir = findNewDirectionOnCollision([positions[collisionsBelow[0]*3], positions[collisionsBelow[0]*3+1], positions[collisionsBelow[0]*3+2]], 
-  //     posParticle,
-  //     dirParticle.length(), solDir);
+    var i = angleFinal.indexOf(Math.min(...angleFinal));
 
-  //     // console.log(solDir);
-  // }
+    solDir = findNewDirectionOnCollision([collisionsBelowPos[i*3], collisionsBelowPos[i*3+1], collisionsBelowPos[i*3+2]], 
+      posParticle,
+      dirParticle.length(), finalVec);
+        
+    // console.log(solDir);
+  }
+  
   return solDir;
 }
 
@@ -415,8 +399,13 @@ function findNewDirectionOnCollision(cSphereCollided, cSphereOriginal, radio, ve
   vector = new THREE.Vector3()
   vector.copy(vectorToMatch);
   // console.log(vector);
-
+  if(calculateVector(cSphereCollided, cSphereOriginal).angleTo(vector) == 0){
+    // console.log(radio);
+    return new THREE.Vector3(getRandomArbitrary(-100,100), 0, getRandomArbitrary(-100,100)).setLength(radio);
+  }
   vector.projectOnPlane(calculateVector(cSphereCollided, cSphereOriginal));
+  // console.log(vector);
+  
   // console.log(vector);
   // console.log(vector.dot(calculateVector(cSphereOriginal, cSphereCollided)));
   return vector;
