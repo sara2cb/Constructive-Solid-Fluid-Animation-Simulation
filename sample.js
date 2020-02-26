@@ -2,7 +2,7 @@ var renderer, scene, camera;
 
 var particleSystem, uniforms, geometry;
 
-var noParticles = 100;
+var noParticles = 50;
 var radius = 15;
 var particleRad = 1.5;
 var redirectionParticles = [];
@@ -144,7 +144,7 @@ function init() {
 }
 
 function createRandomParticle(){
-  // return getRandomArbitrary(-2,2);
+  return getRandomArbitrary(-4,4);
   return getRandomArbitrary(-radius,radius);
 }
 
@@ -197,6 +197,47 @@ function render() {
     var collisionsAbovePos = [];
     var collisionsBelowPos = [];
 
+    var collX = 0;
+    var collZ = 0;
+    var minSpeed = 1;
+    if(Math.abs(positions[i*3+2]) > radius){
+      if(positions[i*3+2] > radius){
+        positions[i*3+2] = radius;
+        if(curDir.length() > minSpeed || Math.abs(positions[i*3+1]) > radius){
+          collZ = 1
+        }else{
+          collisionsAboveDir.push(noSpeed);
+          collisionsAbovePos.push(positions[i*3], positions[i*3+1], positions[i*3+2]+particleRad*2);
+        }
+      }else{
+        positions[i*3+2] = -radius;
+        if(curDir.length() > minSpeed || Math.abs(positions[i*3+1]) > radius){
+          collZ = -1
+        }else{
+          collisionsAboveDir.push(noSpeed);
+          collisionsAbovePos.push(positions[i*3], positions[i*3+1], positions[i*3+2]-particleRad*2);
+        }
+      }
+    } if(Math.abs(positions[i*3]) > radius){
+      if(positions[i*3] > radius){
+        positions[i*3] = radius;
+        if(curDir.length() > minSpeed || Math.abs(positions[i*3+1]) > radius){
+          collX = 1
+        }else{
+          collisionsAboveDir.push(noSpeed);
+          collisionsAbovePos.push(positions[i*3]+particleRad*2, positions[i*3+1], positions[i*3+2]);
+        }
+      }else{
+        positions[i*3] = -radius;
+        if(curDir.length() > minSpeed || Math.abs(positions[i*3+1]) > radius){
+          collX = -1
+        }else{
+          collisionsAboveDir.push(noSpeed);
+          collisionsAbovePos.push(positions[i*3]-particleRad*2, positions[i*3+1], positions[i*3+2]);
+        }
+      }
+    }
+
     for( var j = 0; j<noParticles; j++){
       if(distance(positions[i*3], positions[j*3], positions[i*3+1], positions[j*3+1], positions[i*3+2], positions[j*3+2]) < particleRad*2 && i !=j){
         if( positions[i*3+1] > positions[j*3+1] ){
@@ -214,25 +255,7 @@ function render() {
 
     curDir = particlesCollision([positions[i*3], positions[i*3+1], positions[i*3+2]], particlesInfo[i][DIRECTION], collisionsAboveDir, collisionsBelowDir, collisionsAbovePos, collisionsBelowPos);
     // console.log(curDir);
-    var collX = 0;
-    var collZ = 0;
-    if(Math.abs(positions[i*3+2]) > radius){
-      if(positions[i*3+2] > radius){
-        positions[i*3+2] = radius;
-        collZ = 1
-      }else{
-        positions[i*3+2] = -radius;
-        collZ = -1
-      }
-    } if(Math.abs(positions[i*3]) > radius){
-      if(positions[i*3] > radius){
-        positions[i*3] = radius;
-        collX = 1
-      }else{
-        positions[i*3] = -radius;
-        collX = -1
-      }
-    }
+    
 
     if(Math.abs(positions[i*3+1]) > radius){
       if(positions[i*3+1] > radius){
@@ -248,10 +271,17 @@ function render() {
       }
     }
 
-    if(collZ != 0){
+    if(collZ != 0 && collX != 0){
+      if(curDir.getComponent(1)<0){
+        curDir.set(0,-curDir.length(),0)
+      }else{
+        curDir.set(0,curDir.length(),0)
+      }
+    }
+    else if(collZ != 0){
       curDir = collisionOnWallZ(curDir);
     }
-    if(collX != 0){
+    else if(collX != 0){
       curDir = collisionOnWallX(curDir);
     }
     
@@ -320,6 +350,9 @@ var vectorAdd;
 var copyVector;
 var middleColPoint;
 var straightColl = []
+var toRotateAbove;
+var distanceCenterMiddle;
+var toCopy;
 //[positions[i*3], positions[i*3+1], positions[i*3+2]], particlesInfo[i][DIRECTION], collisionsAboveDir, collisionsBelowDir, collisionsAbovePos, collisionsBelowPos
 function particlesCollision(posParticle, dirParticle, collisionsAboveDir, collisionsBelowDir, collisionsAbovePos, collisionsBelowPos){
   solDir = dirParticle;
@@ -333,7 +366,7 @@ function particlesCollision(posParticle, dirParticle, collisionsAboveDir, collis
     for(var i = 0; i<collisionsAboveDir.length; i++){
       curPerc = angleOfTwoCollidedParticles(posParticle, dirParticle, [collisionsAbovePos[i*3], collisionsAbovePos[i*3+1], collisionsAbovePos[i*3+2]], collisionsAboveDir[i]);
 
-      curPerc = 1 - (curPerc/(Math.PI/4));
+      curPerc = 1 - (curPerc/(Math.PI/2));
       copyVector.copy(collisionsAboveDir[i]);
       copyVector.setLength(collisionsAboveDir[i].length()*curPerc);
 
@@ -345,8 +378,35 @@ function particlesCollision(posParticle, dirParticle, collisionsAboveDir, collis
     }
     
     solDir.set(-(middleColPoint[0]-posParticle[0]), -(middleColPoint[1]-posParticle[1]), -(middleColPoint[2]-posParticle[2]));
+    distanceCenterMiddle = solDir.length();
+    if(distanceCenterMiddle < particleRad){
+      // console.log("herererererer");
+      toRotateAbove = new THREE.Vector3();
+      toCopy = new THREE.Vector3();
+      toCopy.copy(solDir);
+      toCopy.setComponent(1,0);
+      toRotateAbove.copy(toCopy);
+      // console.log(toRotateAbove);
+      toRotateAbove.applyAxisAngle(yVector, Math.PI/2);
+      // console.log(toRotateAbove);
+      toRotateAbove.normalize();
+      // console.log(1-(distanceCenterMiddle/particleRad) * (Math.PI/2));
+
+      toCopy.applyAxisAngle(toRotateAbove, 1-(distanceCenterMiddle/particleRad) * (Math.PI/2));
+      // console.log(toCopy)
+      if(toCopy.getComponent(1)< 0){
+        // console.log("otherway");
+        toCopy.copy(solDir);
+        toCopy.setComponent(1,0);
+        toCopy.applyAxisAngle(toRotateAbove, -(1-(distanceCenterMiddle/particleRad) * (Math.PI/2)));
+        // console.log(toCopy)
+      }
+      solDir.copy(toCopy)
+      // console.log(solDir);
+    }
     solDir.setLength(0.01);
     // console.log(collisionsAbovePos);
+    
     if(Math.cos(solDir.angleTo(vectorAdd))>=0){
       solDir.setLength(solDir.length() + Math.cos(solDir.angleTo(vectorAdd))*vectorAdd.length());
     }
@@ -369,9 +429,10 @@ function particlesCollision(posParticle, dirParticle, collisionsAboveDir, collis
 
     solDir = findNewDirectionOnCollision([collisionsBelowPos[i*3], collisionsBelowPos[i*3+1], collisionsBelowPos[i*3+2]], 
       posParticle,
-      dirParticle.length(), finalVec);
+      solDir.length(), finalVec);
         
     // console.log(solDir);
+    
   }
   
   return solDir;
@@ -391,6 +452,10 @@ function angleOfTwoCollidedParticles(posParticleOriginal, dirParticleOriginal, p
 
 //cSphere = [x,y,z]
 var vector;
+var xLeft;
+var xRight;
+var zLeft;
+var zRight;
 function findNewDirectionOnCollision(cSphereCollided, cSphereOriginal, radio, vectorToMatch) {
   // console.log(cSphereCollided);
   // console.log(cSphereOriginal);
@@ -401,9 +466,17 @@ function findNewDirectionOnCollision(cSphereCollided, cSphereOriginal, radio, ve
   // console.log(vector);
   if(calculateVector(cSphereCollided, cSphereOriginal).angleTo(vector) == 0){
     // console.log(radio);
-    return new THREE.Vector3(getRandomArbitrary(-100,100), 0, getRandomArbitrary(-100,100)).setLength(radio);
+    xLeft = -100
+    xRight = 100;
+    if(cSphereOriginal[0]<=-radius) xLeft = 0;
+    if(cSphereOriginal[0]>=radius) xRight = 0;
+    zLeft = -100
+    zRight = 100;
+    if(cSphereOriginal[2]<=-radius) zLeft = 0;
+    if(cSphereOriginal[2]>=radius) zRight = 0;
+    return new THREE.Vector3(getRandomArbitrary(xLeft,xRight), 0, getRandomArbitrary(zLeft,zRight)).setLength(radio);
   }
-  vector.projectOnPlane(calculateVector(cSphereCollided, cSphereOriginal));
+  vector.projectOnPlane(calculateVector(cSphereCollided, cSphereOriginal)).setLength(radio);
   // console.log(vector);
   
   // console.log(vector);
