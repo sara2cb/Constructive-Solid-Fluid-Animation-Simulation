@@ -49,6 +49,7 @@ function init() {
   document.getElementById("parabolic").addEventListener("click", paraboleButton);
   document.getElementById("streaming").addEventListener("click", streamingButton);
   document.getElementById("bigDemo").addEventListener("click", bigDemoButton);
+  document.getElementById("wall").addEventListener("click", collisionWallButton);
   camera = new THREE.PerspectiveCamera( 40, window.innerWidth / window.innerHeight, 1, 10000 );
 
   scene = new THREE.Scene();
@@ -361,7 +362,7 @@ function render() {
     curDir = particlesCollision([positions[i*3], positions[i*3+1], positions[i*3+2]], particlesInfo[i][DIRECTION], collisionsAboveDir, collisionsBelowDir, collisionsAbovePos, collisionsBelowPos, collY);
 
     if(collY == 1){
-      positions[i*3+1] = radius-1;
+      positions[i*3+1] = radius-0.1;
 
       if(curDir.getComponent(0) != 0 || curDir.getComponent(2) != 0){
         curDir = collisionOnWallY(curDir, collX, collZ,[positions[i*3], positions[i*3+1], positions[i*3+2]]);
@@ -441,20 +442,9 @@ var rand1;
 function collisionOnWallY(dirParticle, collX, collZ, posParticle){
   if(dirParticle.getComponent(0) == 0 && dirParticle.getComponent(2)==0){
     if(collX != 0 || collZ != 0){
+      console.log("here");
       return new THREE.Vector3(-collX, 0, -collZ).setLength(dirParticle.length()/2);
     }else{
-      // if(Math.abs(posParticle[0]) > radius || (Math.abs(posParticle[2]) > radius)){
-      //   if(Math.abs(posParticle[0]) > radius && (Math.abs(posParticle[2]) > radius)){
-      //     return new THREE.Vector3(-posParticle[0], 0, -posParticle[2]).setLength(dirParticle.length());
-      //   }else if(Math.abs(posParticle[0]) > radius){
-      //     return new THREE.Vector3(-posParticle[0], 0, posParticle[2]).setLength(dirParticle.length());
-      //   }else{
-      //     return new THREE.Vector3(posParticle[0], 0, -posParticle[2]).setLength(dirParticle.length());
-      //   }
-      // }else{
-      //   return new THREE.Vector3(posParticle[0], 0, posParticle[2]).setLength(dirParticle.length());
-      // }
-      
       return new THREE.Vector3(getRandomArbitrary(-100,100), 0, getRandomArbitrary(-100,100)).setLength(dirParticle.length());
 
     }
@@ -722,6 +712,9 @@ function columnParticlesButton(){
 }
 
 function boxParticlesButton(){
+  if(obstacleInScene){
+    deleteObstacle();
+  }
   if(radius != radiusSmall){
     setSmallDemoParam();
   }
@@ -812,6 +805,9 @@ function sameLevelButton(){
 }
 
 function aboveLevelButton(){
+  if(obstacleInScene){
+    deleteObstacle();
+  }
   if(radius != radiusSmall){
     setSmallDemoParam();
   }
@@ -841,10 +837,39 @@ function aboveLevelButton(){
   geometry.attributes.position.needsUpdate = true;
   checked = false;
 }
-
-function paraboleButton(){
+function collisionWallButton(){
   if(radius != radiusSmall){
     setSmallDemoParam();
+  }
+  noParticlesShown = 2;
+  var positions = geometry.attributes.position.array;
+  particlesInfo[0][DIRECTION] = new THREE.Vector3(1, 0, 0);
+  particlesInfo[0][ACCELERATION] = 0.001;
+  positions[0*3] =  -radius/2;
+  positions[0*3+1] = -radius;
+  positions[0*3+2] =  -radius/2;
+
+  particlesInfo[1][DIRECTION] = new THREE.Vector3(0.5, 0, 0);
+  particlesInfo[1][ACCELERATION] = 0.001;
+  positions[1*3] =  -radius/2;
+  positions[1*3+1] = -radius ;
+  positions[1*3+2] =  radius/2;
+
+  for ( var i = 2; i < noParticles; i ++ ) {
+    particlesInfo[i][DIRECTION] = new THREE.Vector3(0, 0, 0);
+    particlesInfo[i][ACCELERATION] = 0.001;
+      
+    positions[i*3] = NaN;
+    positions[i*3+1] = NaN ;
+    positions[i*3+2] = NaN;
+  }
+  geometry.attributes.position.needsUpdate = true;
+  checked = false;
+}
+
+function paraboleButton(){
+  if(obstacleInScene){
+    deleteObstacle();
   }
   if(radius != radiusSmall){
     setSmallDemoParam();
@@ -934,8 +959,8 @@ function streamingButton(){
 }
 
 function bigDemoButton(){
-  if(radius != radiusSmall){
-    setSmallDemoParam();
+  if(obstacleInScene){
+    deleteObstacle();
   }
   if(radius != radiusBig){
     setBigDemoParam();
@@ -1141,7 +1166,7 @@ function addCubeBig(){
   }else{
     cubeBigInScene = true;
     scene.add( lineB );
-    scene.add( lineB1 );
+    scene.add( lineB1 );  
     scene.add( lineB2 );
     scene.add( lineB3 );
     scene.add( cubeB );
