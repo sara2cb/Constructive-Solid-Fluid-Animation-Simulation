@@ -227,13 +227,15 @@ function render() {
     time += (Date.now() - timeLastTime)/1000.0;
   }
 
-  
-  if(stremingOn && noParticlesShown<160){
+  var maxStream = 160
+  if(radius == radiusBig){
+    maxStream = noParticles
+  }
+  if(stremingOn && noParticlesShown<maxStream){
     timeStreaming += (Date.now() - timeLastTime)/1000.0
-    // console.log(timeStreaming);
     if(timeStreaming > 0.1){
-      // console.log("here");
-      noParticlesShown++;
+        noParticlesShown++;
+      
 
       var rangeMin = -radius/3;
       var rangeMax = 0
@@ -258,12 +260,10 @@ function render() {
   }
 
   timeLastTime = Date.now();
-  // console.log(noParticlesShown)
   for ( var i = 0; i < noParticlesShown; i++ ) {
 
     particlesInfo[i][DIRECTION].setComponent(1, particlesInfo[i][DIRECTION].getComponent(1) - time * particlesInfo[i][ACCELERATION]);
     
-    // console.log( particlesInfo[i][DIRECTION]);
     curDir = particlesInfo[i][DIRECTION];
     var collisionsAboveDir = [];
     var collisionsBelowDir = [];
@@ -273,7 +273,7 @@ function render() {
     var collX = 0;
     var collZ = 0;
     var collY = 0;
-    var minSpeed = 1;
+    var minSpeed = 0.8;
     if(Math.abs(positions[i*3+2]) > radius){
       if(positions[i*3+2] > radius){
         positions[i*3+2] = radius;
@@ -365,17 +365,17 @@ function render() {
       positions[i*3+1] = radius-0.1;
 
       if(curDir.getComponent(0) != 0 || curDir.getComponent(2) != 0){
-        curDir = collisionOnWallY(curDir, collX, collZ,[positions[i*3], positions[i*3+1], positions[i*3+2]]);
+        curDir = collisionOnWallY(curDir,[positions[i*3], positions[i*3+1], positions[i*3+2]]);
       }else{
         curDir.set(0,0,0);
       }
     }else if ( collY == -1){
       positions[i*3+1] = -radius;
-      curDir = collisionOnWallY(curDir, collX, collZ, [positions[i*3], positions[i*3+1], positions[i*3+2]]);
+      curDir = collisionOnWallY(curDir, [positions[i*3], positions[i*3+1], positions[i*3+2]]);
     }
     if(collY == -2){
       positions[i*3+1] = -radius/3 ;
-      curDir = collisionOnWallY(curDir, collX, collZ, [positions[i*3], positions[i*3+1], positions[i*3+2]]);
+      curDir = collisionOnWallY(curDir, [positions[i*3], positions[i*3+1], positions[i*3+2]]);
     }
 
     if(collZ != 0 && collX != 0){
@@ -424,25 +424,30 @@ function updatePositionFalling(time, dirParticle){
 }
 
 function collisionOnWallX(dirParticle){
-  if(dirParticle.getComponent(1)<0){
-    return new THREE.Vector3(0, dirParticle.getComponent(1) - Math.abs(dirParticle.getComponent(0)), dirParticle.getComponent(2));
-  }
-  return new THREE.Vector3(0, Math.abs(dirParticle.getComponent(0)), dirParticle.getComponent(2));
+    return new THREE.Vector3(0, dirParticle.getComponent(1) + Math.abs(dirParticle.getComponent(0)), dirParticle.getComponent(2));
 }
 
 function collisionOnWallZ(dirParticle){
-  if(dirParticle.getComponent(1)<0){
-    return new THREE.Vector3(0, dirParticle.getComponent(1) - Math.abs(dirParticle.getComponent(2)), dirParticle.getComponent(2));
-  }
-  return new THREE.Vector3(dirParticle.getComponent(0), Math.abs(dirParticle.getComponent(2)), 0);
+    return new THREE.Vector3(dirParticle.getComponent(0), dirParticle.getComponent(1) + Math.abs(dirParticle.getComponent(2)), 0);
 }
 
 var vec;
 var rand1;
-function collisionOnWallY(dirParticle, collX, collZ, posParticle){
+
+function collisionOnWallY(dirParticle, posParticle){
+  var collX = 0;
+  var collZ = 0;
+  if(posParticle[0] > radius-2){
+    collX = 1;
+  }else if(posParticle[0] < -radius+2){
+    collX = -1;
+  }if(posParticle[2] > radius-2){
+    collZ = 1;
+  }else if(posParticle[2] < -radius+2){
+    collZ = -1;
+  }
   if(dirParticle.getComponent(0) == 0 && dirParticle.getComponent(2)==0){
-    if(collX != 0 || collZ != 0){
-      console.log("here");
+    if(posParticle != 0 || collZ != 0){
       return new THREE.Vector3(-collX, 0, -collZ).setLength(dirParticle.length()/2);
     }else{
       return new THREE.Vector3(getRandomArbitrary(-100,100), 0, getRandomArbitrary(-100,100)).setLength(dirParticle.length());
@@ -467,7 +472,6 @@ function particlesCollision(posParticle, dirParticle, collisionsAboveDir, collis
   solDir = dirParticle;
 
   if(collisionsAboveDir.length){
-    // console.log(collY);
     if(collY < 0 || collisionsBelowDir.length > 0){
       solDir = new THREE.Vector3(0,0,0);
       middleColPoint = [0,0,0];
@@ -493,7 +497,6 @@ function particlesCollision(posParticle, dirParticle, collisionsAboveDir, collis
       
      
       if(distanceCenterMiddle < particleRad){
-        // console.log("herererererer");
         toRotateAbove = new THREE.Vector3();
         toCopy = new THREE.Vector3();
         toCopy.copy(solDir);
@@ -516,7 +519,6 @@ function particlesCollision(posParticle, dirParticle, collisionsAboveDir, collis
       if(Math.cos(solDir.angleTo(dirParticle))>=0){
         solDir.setLength(solDir.length() + Math.cos(solDir.angleTo(dirParticle))*dirParticle.length());
       }
-      // console.log(solDir)
     }else{
       // if(collisionsBelowDir.length == 0){
         solDir.setComponent(0,0);
@@ -542,8 +544,6 @@ function particlesCollision(posParticle, dirParticle, collisionsAboveDir, collis
     solDir = findNewDirectionOnCollision([collisionsBelowPos[i*3], collisionsBelowPos[i*3+1], collisionsBelowPos[i*3+2]], 
       posParticle,
       solDir.length(), finalVec);
-        
-    // console.log(solDir);
     
   }
   
@@ -836,20 +836,25 @@ function aboveLevelButton(){
   }
   geometry.attributes.position.needsUpdate = true;
   checked = false;
+  stremingOn = false;
 }
+
 function collisionWallButton(){
   if(radius != radiusSmall){
     setSmallDemoParam();
   }
+  if(obstacleInScene){
+    deleteObstacle();
+  }
   noParticlesShown = 2;
   var positions = geometry.attributes.position.array;
-  particlesInfo[0][DIRECTION] = new THREE.Vector3(1, 0, 0);
+  particlesInfo[0][DIRECTION] = new THREE.Vector3(0.8, 0, 0);
   particlesInfo[0][ACCELERATION] = 0.001;
   positions[0*3] =  -radius/2;
   positions[0*3+1] = -radius;
   positions[0*3+2] =  -radius/2;
 
-  particlesInfo[1][DIRECTION] = new THREE.Vector3(0.5, 0, 0);
+  particlesInfo[1][DIRECTION] = new THREE.Vector3(0.2, 0, 0);
   particlesInfo[1][ACCELERATION] = 0.001;
   positions[1*3] =  -radius/2;
   positions[1*3+1] = -radius ;
@@ -865,6 +870,7 @@ function collisionWallButton(){
   }
   geometry.attributes.position.needsUpdate = true;
   checked = false;
+  stremingOn = false;
 }
 
 function paraboleButton(){
@@ -967,20 +973,22 @@ function bigDemoButton(){
   }
   var yEl = radius-1;
   var x,z;
-  noParticlesShown = noParticles;
+  noParticlesShown = 5;
   var positions = geometry.attributes.position.array;
+  var rangeMin = -radius/3;
+  var rangeMax = 0
   for ( var i = 0; i < noParticles; i ++ ) {
-    if(i<noParticlesShown){
-      particlesInfo[i][DIRECTION] = new THREE.Vector3(0, -0.01, 0);
+    if(i < noParticlesShown){
+      particlesInfo[i][DIRECTION] = new THREE.Vector3(-0.0, -0.01, 0);
       particlesInfo[i][ACCELERATION] = 0.001;
 
       if(i == 0){
-        positions[i*3] =  getRandomArbitrary(-radius/2,radius/2);
+        positions[i*3] =  getRandomArbitrary(  rangeMin, rangeMax);
         positions[i*3+1] = yEl ;
-        positions[i*3+2] =  getRandomArbitrary(-radius/2,radius/2);
+        positions[i*3+2] =  getRandomArbitrary(rangeMin,rangeMax);
       }else{
-        x = getRandomArbitrary(-radius/2,radius/2);
-        z = getRandomArbitrary(-radius/2,radius/2);
+        x = getRandomArbitrary(rangeMin,rangeMax);
+        z = getRandomArbitrary(rangeMin,rangeMax);
         positions[i*3] =  x;
         positions[i*3+1] = yEl ;
         positions[i*3+2] =  z;
@@ -990,9 +998,9 @@ function bigDemoButton(){
         
         var changed = false
         while(distance(positions[i*3], positions[j*3], positions[i*3+1], positions[j*3+1], positions[i*3+2], positions[j*3+2]) <=  particleRad*2){
-          positions[i*3] = getRandomArbitrary(-radius/2,radius/2);
+          positions[i*3] = getRandomArbitrary(rangeMin,rangeMax);
           positions[i*3+1] = yEl;
-          positions[i*3+2] = getRandomArbitrary(-radius/2,radius/2);
+          positions[i*3+2] = getRandomArbitrary(rangeMin,rangeMax);
           counter++;
           var changed = true;
         }
@@ -1006,14 +1014,17 @@ function bigDemoButton(){
         }
       }
     }else{
-      positions[i*3] =  NaN;
+      particlesInfo[i][DIRECTION] = new THREE.Vector3(-0.0, -0.05, 0);
+      particlesInfo[i][ACCELERATION] = 0.001;
+        
+      positions[i*3] = NaN;
       positions[i*3+1] = NaN ;
       positions[i*3+2] = NaN;
     }
   }
   geometry.attributes.position.needsUpdate = true;
   checked = false;
-  stremingOn = false;
+  stremingOn = true;
 }
 
 function setSmallDemoParam(){
